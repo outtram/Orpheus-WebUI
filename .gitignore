@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+.Python
+
+# Environment
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Gradio
+gradio_cached_examples/
+flagged/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+temp/

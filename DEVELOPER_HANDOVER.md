@@ -98,4 +98,6 @@ Ready for initial commit. Use conventional commits:
 - `refactor:` for code changes
 
 ## Recent Commits
+- `0fc0411` fix: make launch.sh executable (2025-05-23)
+- `abb3e99` docs: update handover notes with GitHub setup status (2025-05-23)
 - `3a1709c` feat: initial commit - Orpheus WebUI with Bastion integration (2025-05-23)

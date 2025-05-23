@@ -182,7 +182,7 @@ Types:
 - `chore:` Maintenance
 
 ### Recent Commits
-- `[pending]` fix: Python 3.13 compatibility and launch configuration (2025-05-23)
+- `6c79691` fix: Python 3.13 compatibility and launch configuration (2025-05-23)
 - `a04531b` refactor: migrate from Bastion API to local Orpheus model (2025-05-23)
 - Previous commits from Bastion version preserved
 

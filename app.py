@@ -1,65 +1,119 @@
 import gradio as gr
-import httpx
 import json
 from typing import Dict, List, Optional
 import os
+import sys
+import time
+import tempfile
+import wave
+import numpy as np
 from dotenv import load_dotenv
+
+# Add the orpheus-tts-local directory to Python path
+ORPHEUS_PATH = "/Users/touttram/CODER4LIFE/Orpheus-Test-V1/orpheus-tts-local"
+sys.path.insert(0, ORPHEUS_PATH)
+
+# Import the local Orpheus model
+try:
+    from gguf_orpheus import (
+        generate_speech_from_api,
+        AVAILABLE_VOICES,
+        DEFAULT_VOICE,
+        TEMPERATURE,
+        TOP_P,
+        REPETITION_PENALTY,
+        MAX_TOKENS
+    )
+    ORPHEUS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Could not import local Orpheus model: {e}")
+    ORPHEUS_AVAILABLE = False
+    AVAILABLE_VOICES = ["tara", "jess", "leo", "leah", "dan", "mia", "zac", "zoe"]
+    DEFAULT_VOICE = "tara"
 
 # Load environment variables
 load_dotenv()
 
-class OrpheusAPIClient:
-    """Client for Bastion-hosted Orpheus model"""
+# Available emotions from the model
+EMOTIONS = ["laugh", "chuckle", "sigh", "cough", "sniffle", "groan", "yawn", "gasp"]
+
+class OrpheusLocalClient:
+    """Client for local Orpheus model"""
     
-    def __init__(self, base_url: str, api_key: Optional[str] = None):
-        self.base_url = base_url.rstrip('/')
-        self.headers = {}
-        if api_key:
-            self.headers['Authorization'] = f'Bearer {api_key}'
+    def __init__(self):
+        self.model_path = ORPHEUS_PATH
+        self.check_model_availability()
+    
+    def check_model_availability(self):
+        """Check if the local model is available"""
+        if not ORPHEUS_AVAILABLE:
+            return False, "Local Orpheus model not found at specified path"
+        
+        # Check if LM Studio is running
+        import requests
+        try:
+            response = requests.get("http://127.0.0.1:1234/v1/models", timeout=2)
+            if response.status_code == 200:
+                return True, "Local model available and LM Studio is running"
+            else:
+                return False, "LM Studio is not responding correctly"
+        except:
+            return False, "LM Studio is not running. Please start LM Studio on port 1234"
     
     def generate_speech(
         self,
         text: str,
-        voice: str = "tara",
-        temperature: float = 0.9,
-        top_p: float = 0.95,
-        repetition_penalty: float = 1.1,
-        max_tokens: int = 4096,
-        emotion_tags: List[str] = None
+        voice: str = DEFAULT_VOICE,
+        temperature: float = TEMPERATURE,
+        top_p: float = TOP_P,
+        repetition_penalty: float = REPETITION_PENALTY,
+        max_tokens: int = MAX_TOKENS,
+        emotion_tags: List[str] = None,
+        output_file: Optional[str] = None
     ) -> Dict:
-        """Call Bastion API for speech generation"""
+        """Generate speech using local Orpheus model"""
         
-        # Format text with voice and emotion tags
-        formatted_text = f"{voice}: {text}"
+        # Add emotion tags to text if selected
+        if emotion_tags:
+            for emotion in emotion_tags:
+                text = f"<{emotion}> {text}"
         
-        payload = {
-            "text": formatted_text,
-            "temperature": temperature,
-            "top_p": top_p,
-            "repetition_penalty": repetition_penalty,
-            "max_tokens": max_tokens
-        }
+        # Generate unique output filename if not provided
+        if not output_file:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
+            os.makedirs(output_dir, exist_ok=True)
+            output_file = os.path.join(output_dir, f"{voice}_{timestamp}.wav")
         
         try:
-            with httpx.Client(timeout=60.0) as client:
-                response = client.post(
-                    f"{self.base_url}/generate",
-                    json=payload,
-                    headers=self.headers
-                )
-                response.raise_for_status()
-                return response.json()
+            # Call the local model
+            start_time = time.time()
+            audio_segments = generate_speech_from_api(
+                prompt=text,
+                voice=voice,
+                temperature=temperature,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                max_tokens=max_tokens,
+                output_file=output_file
+            )
+            end_time = time.time()
+            
+            # Calculate duration
+            duration = end_time - start_time
+            
+            return {
+                "success": True,
+                "output_file": output_file,
+                "duration": duration,
+                "voice": voice,
+                "segments": len(audio_segments) if audio_segments else 0
+            }
         except Exception as e:
-            return {"error": str(e)}
+            return {"success": False, "error": str(e)}
 
-# Initialize API client
-BASTION_URL = os.getenv("BASTION_URL", "https://bastion.example.com/orpheus")
-API_KEY = os.getenv("BASTION_API_KEY", "")
-client = OrpheusAPIClient(BASTION_URL, API_KEY)
-
-# Available voices and emotions
-VOICES = ["tara", "jess", "leo", "leah", "dan", "mia", "zac", "zoe"]
-EMOTIONS = ["laugh", "chuckle", "sigh", "cough", "sniffle", "groan", "yawn", "gasp"]
+# Initialize local client
+client = OrpheusLocalClient()
 
 def process_text(
     text: str,
@@ -70,38 +124,40 @@ def process_text(
     max_tokens: int,
     add_emotions: List[str]
 ):
-    """Process text and call API"""
+    """Process text and generate speech locally"""
     
     if not text.strip():
-        return "Please enter some text", None
+        return "Please enter some text", None, None
     
-    # Add emotion tags to text if selected
-    if add_emotions:
-        for emotion in add_emotions:
-            text = f"<{emotion}> {text}"
+    # Check model availability
+    available, status_msg = client.check_model_availability()
+    if not available:
+        return f"Model Error: {status_msg}", None, None
     
-    # Call API
+    # Generate speech
     result = client.generate_speech(
         text=text,
         voice=voice,
         temperature=temperature,
         top_p=top_p,
         repetition_penalty=repetition_penalty,
-        max_tokens=max_tokens
+        max_tokens=max_tokens,
+        emotion_tags=add_emotions
     )
     
-    if "error" in result:
-        return f"Error: {result['error']}", None
-    
-    # Return response (audio processing would happen here)
-    return f"Generated successfully for voice: {voice}", result
+    if result.get("success"):
+        status = f"Generated successfully in {result['duration']:.2f}s"
+        audio_file = result.get("output_file")
+        return status, result, audio_file
+    else:
+        return f"Error: {result.get('error', 'Unknown error')}", result, None
 
 def create_interface():
     """Create Gradio interface"""
     
-    with gr.Blocks(title="Orpheus TTS WebUI") as app:
-        gr.Markdown("# Orpheus TTS WebUI")
-        gr.Markdown("Connected to Bastion-hosted model")
+    with gr.Blocks(title="Orpheus TTS WebUI - Local Model") as app:
+        gr.Markdown("# Orpheus TTS WebUI - Local Model")
+        gr.Markdown("Using local Orpheus model via LM Studio")
         
         with gr.Tabs():
             # Standard Generation Tab
@@ -115,54 +171,61 @@ def create_interface():
                         )
                         
                         voice_dropdown = gr.Dropdown(
-                            choices=VOICES,
-                            value="tara",
+                            choices=AVAILABLE_VOICES,
+                            value=DEFAULT_VOICE,
                             label="Voice"
                         )
                         
                         emotion_checkboxes = gr.CheckboxGroup(
                             choices=EMOTIONS,
-                            label="Emotions (optional)"
+                            label="Emotions (optional)",
+                            info="Add emotional expressions to the speech"
                         )
                         
                     with gr.Column():
                         temperature = gr.Slider(
-                            minimum=0.1,
+                            minimum=0.0,
                             maximum=2.0,
-                            value=0.9,
+                            value=TEMPERATURE,
                             step=0.1,
-                            label="Temperature"
+                            label="Temperature",
+                            info="Controls randomness (0 = deterministic)"
                         )
                         
                         top_p = gr.Slider(
                             minimum=0.1,
                             maximum=1.0,
-                            value=0.95,
+                            value=TOP_P,
                             step=0.05,
-                            label="Top P"
+                            label="Top P",
+                            info="Nucleus sampling threshold"
                         )
                         
                         repetition_penalty = gr.Slider(
                             minimum=1.0,
                             maximum=2.0,
-                            value=1.1,
+                            value=REPETITION_PENALTY,
                             step=0.05,
-                            label="Repetition Penalty"
+                            label="Repetition Penalty",
+                            info="Prevents repetitive output (>=1.1 recommended)"
                         )
                         
                         max_tokens = gr.Slider(
                             minimum=256,
-                            maximum=8192,
-                            value=4096,
-                            step=256,
-                            label="Max Tokens"
+                            maximum=2048,
+                            value=MAX_TOKENS,
+                            step=64,
+                            label="Max Tokens",
+                            info="Maximum output length"
                         )
                 
                 generate_btn = gr.Button("Generate Speech", variant="primary")
                 
                 with gr.Row():
                     status_output = gr.Textbox(label="Status", interactive=False)
-                    response_output = gr.JSON(label="API Response", visible=True)
+                    audio_output = gr.Audio(label="Generated Audio", type="filepath")
+                
+                response_output = gr.JSON(label="Generation Details", visible=True)
                 
                 generate_btn.click(
                     fn=process_text,
@@ -175,30 +238,57 @@ def create_interface():
                         max_tokens,
                         emotion_checkboxes
                     ],
-                    outputs=[status_output, response_output]
+                    outputs=[status_output, response_output, audio_output]
                 )
             
             # Long Form Tab
             with gr.Tab("Long Form Content"):
                 gr.Markdown("### Coming Soon")
                 gr.Markdown("Long-form content processing will be available after basic functionality is confirmed.")
+            
+            # Voice Samples Tab
+            with gr.Tab("Voice Samples"):
+                gr.Markdown("### Available Voices")
+                gr.Markdown("Listed in order of conversational realism:")
+                for i, voice in enumerate(AVAILABLE_VOICES):
+                    marker = "★" if voice == DEFAULT_VOICE else "•"
+                    gr.Markdown(f"{marker} **{voice}**" + (" (Recommended)" if voice == DEFAULT_VOICE else ""))
         
         # Info section
-        with gr.Accordion("API Configuration", open=False):
-            gr.Markdown(f"""
-            **Current Configuration:**
-            - Bastion URL: `{BASTION_URL}`
-            - API Key: {'Configured' if API_KEY else 'Not Set'}
+        with gr.Accordion("Model Configuration", open=False):
+            available, status = client.check_model_availability()
+            status_color = "green" if available else "red"
             
-            To change these, create a `.env` file with:
-            ```
-            BASTION_URL=your_bastion_url
-            BASTION_API_KEY=your_api_key
-            ```
+            gr.Markdown(f"""
+            **Local Model Status:** <span style="color: {status_color}">{status}</span>
+            
+            **Configuration:**
+            - Model Path: `{ORPHEUS_PATH}`
+            - LM Studio URL: `http://127.0.0.1:1234`
+            - Default Voice: `{DEFAULT_VOICE}`
+            
+            **Requirements:**
+            1. LM Studio must be running on port 1234
+            2. Orpheus model must be loaded in LM Studio
+            3. Model: `orpheus-3b-0.1-ft-q4_k_m`
+            
+            **Emotion Tags:**
+            You can add emotions by selecting them above or typing them directly:
+            `<laugh>`, `<chuckle>`, `<sigh>`, `<cough>`, `<sniffle>`, `<groan>`, `<yawn>`, `<gasp>`
             """)
     
     return app
 
 if __name__ == "__main__":
+    # Check model availability on startup
+    available, status = client.check_model_availability()
+    print(f"Model Status: {status}")
+    
+    if not available:
+        print("\n⚠️  WARNING: Model not available. Please ensure:")
+        print("1. LM Studio is running on http://127.0.0.1:1234")
+        print("2. The Orpheus model is loaded")
+        print("\nThe interface will still start but generation will fail.\n")
+    
     app = create_interface()
     app.launch(server_name="0.0.0.0", server_port=7860)

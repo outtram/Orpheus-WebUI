@@ -6,9 +6,16 @@
 - **Platform**: M1 Mac (16GB RAM)
 - **Status**: Migrated from Bastion API to Local Model
 
-## Current State (2025-05-23 - Update #2)
+## Current State (2025-05-23 - Update #3)
 
-### Completed Today
+### Completed Today - Latest
+- [x] Fixed Python 3.13 compatibility issue with Gradio
+- [x] Updated Gradio to version 5.9.1 for better compatibility
+- [x] Fixed server launch configuration (localhost accessibility)
+- [x] Added fallback launch configuration
+- [x] Improved error handling for launch failures
+
+### Completed Today - Earlier
 - [x] Migrated from Bastion API to local Orpheus model
 - [x] Integrated with `/Users/touttram/CODER4LIFE/Orpheus-Test-V1/orpheus-tts-local/gguf_orpheus.py`
 - [x] Updated UI to support audio file output
@@ -134,6 +141,15 @@ python app.py
 
 ## Troubleshooting
 
+### Python 3.13 Compatibility Error
+**Issue**: TypeError in gradio_client with Python 3.13
+**Solution**: Updated Gradio to 5.9.1 and fixed launch configuration
+**Alternative**: Use Python 3.11 or 3.12 if issues persist
+
+### "Localhost not accessible" Error
+**Issue**: ValueError when launching with server_name="0.0.0.0"
+**Solution**: Changed to server_name="127.0.0.1" with fallback to "localhost"
+
 ### "Model not available" Error
 1. Check LM Studio is running
 2. Verify model is loaded
@@ -166,7 +182,8 @@ Types:
 - `chore:` Maintenance
 
 ### Recent Commits
-- `refactor: migrate from Bastion API to local Orpheus model` (2025-05-23)
+- `[pending]` fix: Python 3.13 compatibility and launch configuration (2025-05-23)
+- `a04531b` refactor: migrate from Bastion API to local Orpheus model (2025-05-23)
 - Previous commits from Bastion version preserved
 
 ## Testing Checklist

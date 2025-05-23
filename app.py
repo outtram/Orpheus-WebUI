@@ -30,6 +30,10 @@ except ImportError as e:
     ORPHEUS_AVAILABLE = False
     AVAILABLE_VOICES = ["tara", "jess", "leo", "leah", "dan", "mia", "zac", "zoe"]
     DEFAULT_VOICE = "tara"
+    TEMPERATURE = 0.0
+    TOP_P = 0.15
+    REPETITION_PENALTY = 1.8
+    MAX_TOKENS = 1200
 
 # Load environment variables
 load_dotenv()
@@ -291,4 +295,11 @@ if __name__ == "__main__":
         print("\nThe interface will still start but generation will fail.\n")
     
     app = create_interface()
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    try:
+        # Try to launch with the fixed configuration
+        app.launch(server_name="127.0.0.1", server_port=7860, share=False, quiet=False)
+    except Exception as e:
+        print(f"\nError launching app: {e}")
+        print("\nTrying alternative launch configuration...")
+        # Fallback launch configuration
+        app.launch(server_name="localhost", server_port=7860, share=False, quiet=False)
